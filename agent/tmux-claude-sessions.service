@@ -1,0 +1,13 @@
+[Unit]
+Description=tmux-claude-sessions: Claude Code tmux sessions follow claude_db.tmux_sessions
+
+[Service]
+# Optional: Environment=TMUX_DB_HOST=127.0.0.1 (see README.txt)
+ExecStart=/usr/bin/python3 %h/tmux-claude-sessions/agent/tmux-claude-sessions.py
+Restart=always
+RestartSec=5
+# tmux servers it starts live in their own scope; never take sessions down with this service
+KillMode=process
+
+[Install]
+WantedBy=default.target
