@@ -12,6 +12,7 @@ Sessions that are already running are left alone, so restarting this service nev
 """
 import glob
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -47,7 +48,13 @@ def tmux(*args):
 
 def running_sessions():
     r = tmux("list-sessions", "-F", "#{session_name}")
-    return set(r.stdout.split()) if r.returncode == 0 else set()
+    return set(r.stdout.splitlines()) if r.returncode == 0 else set()
+
+
+def tmux_name(alias):
+    """tmux session names have no spaces: "my web server" -> "my-web-server" (the Remote Control name keeps the spaces).
+    The Remote Control name (session_name) keeps its spaces."""
+    return re.sub(r"\s+", "-", alias.strip())
 
 
 def pane_pid(alias):
@@ -104,7 +111,7 @@ def refresh_versions(aliases, tree):
 
 
 def start(row):
-    alias, path, name = row["tmux_alias"], row["project_path"], row["session_name"]
+    alias, path, name = tmux_name(row["tmux_alias"]), row["project_path"], row["session_name"]
     if not os.path.isdir(path):
         return f"project path missing: {path}"
     # --continue fails with "No conversation found" in a folder that has never had a session
@@ -123,7 +130,7 @@ def start(row):
 
 
 def stop(row):
-    alias = row["tmux_alias"]
+    alias = tmux_name(row["tmux_alias"])
     pid = pane_pid(alias)
     if pid is not None:
         for cpid, _, comm in descendants(pid, children()):
@@ -174,7 +181,7 @@ def boot_reset(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT id, tmux_alias, start_on_boot FROM tmux_sessions")
         for row in cur.fetchall():
-            if row["tmux_alias"] not in up:
+            if tmux_name(row["tmux_alias"]) not in up:
                 cur.execute("UPDATE tmux_sessions SET desired_state=%s WHERE id=%s",
                             ("running" if row["start_on_boot"] else "stopped", row["id"]))
 
@@ -188,7 +195,7 @@ def tick(conn):
         rows = cur.fetchall()
     restarted = False
     for row in rows:
-        alias, error = row["tmux_alias"], None
+        alias, error = tmux_name(row["tmux_alias"]), None
         if row["update_requested"]:
             with conn.cursor() as cur:
                 cur.execute("UPDATE tmux_sessions SET update_requested=0 WHERE id=%s", (row["id"],))
